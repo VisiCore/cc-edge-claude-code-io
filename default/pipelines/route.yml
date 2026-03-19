@@ -1,0 +1,26 @@
+id: default
+groups: {}
+comments: []
+routes:
+  - id: default
+    name: Session Logs (File Monitor)
+    final: true
+    disabled: false
+    pipeline: claude-code-session-logs
+    description: ""
+    enableOutputExpression: false
+    targetContext: group
+    filter: datatype=='claude-code-session-logs'
+    clones: []
+    output: __group
+  - id: jZR327
+    name: OpenTelemetry (OTLP)
+    final: true
+    disabled: false
+    pipeline: claude-code-otel
+    description: ""
+    enableOutputExpression: false
+    targetContext: group
+    filter: datatype=='claude-code-otel'
+    clones: []
+    output: __group
