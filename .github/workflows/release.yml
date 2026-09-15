@@ -1,0 +1,87 @@
+name: Release
+
+# Publishes a GitHub Release with the packaged .crbl whenever a version tag is
+# pushed. The tag must match the version in package.json.
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read pack metadata
+        id: meta
+        run: |
+          echo "name=$(jq -r .name package.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
+          echo "display_name=$(jq -r .displayName package.json)" >> "$GITHUB_OUTPUT"
+          echo "min_version=$(jq -r .minLogStreamVersion package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches package.json version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version ${{ steps.meta.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Validate pack YAML and JSON
+        run: |
+          python3 -m pip install --quiet pyyaml
+          for f in $(find default -name '*.yml'); do
+            python3 -c "import sys, yaml; yaml.safe_load(open(sys.argv[1]))" "$f"
+          done
+          for f in package.json $(find data -name '*.json'); do
+            jq empty "$f"
+          done
+
+      - name: Build .crbl
+        run: scripts/build-pack.sh dist
+
+      - name: Write release notes
+        id: notes
+        run: |
+          version="${{ steps.meta.outputs.version }}"
+          asset="${{ steps.meta.outputs.name }}-${version}.crbl"
+          sha="$(cut -d' ' -f1 "dist/${asset}.sha256")"
+          {
+            echo "## ${{ steps.meta.outputs.display_name }} ${version}"
+            echo
+            # Pull this version's bullet list out of the README "Release Notes" section.
+            awk -v v="$version" '
+              /^## Release Notes/ { in_section = 1; next }
+              in_section && /^## / { exit }
+              { line = $0; sub(/^[ \t]+/, "", line) }
+              in_section && line ~ "^- \\*\\*" v "\\*\\*" { in_version = 1; next }
+              in_section && in_version && line ~ /^- \*\*/ { exit }
+              in_version && line ~ /^- / { print line }
+            ' README.md
+            echo
+            echo "### Install"
+            echo
+            echo "Upload \`${asset}\` under **Packs** in Cribl Edge (${{ steps.meta.outputs.min_version }}+), then follow the setup steps in the README."
+            echo
+            echo "SHA-256: \`${sha}\`"
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: v${{ steps.meta.outputs.version }}
+          body_path: release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/${{ steps.meta.outputs.name }}-${{ steps.meta.outputs.version }}.crbl
+            dist/${{ steps.meta.outputs.name }}-${{ steps.meta.outputs.version }}.crbl.sha256

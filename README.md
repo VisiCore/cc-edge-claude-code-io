@@ -457,6 +457,26 @@ Cribl Edge tracks file state in its kvstore. If you need to re-ingest files from
 
 ---
 
+## Releasing
+
+Releases are published automatically by GitHub Actions when a version tag is pushed:
+
+1. Bump `version` in `package.json` and add an entry under **Release Notes** below.
+2. Commit, then tag and push:
+
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+The workflow verifies the tag matches `package.json`, validates the pack YAML and JSON, builds `cc-edge-claude-code-io-<version>.crbl`, and attaches it (with a `.sha256` checksum) to a GitHub Release. Tags containing a suffix such as `v1.1.0-rc1` are marked as pre-releases.
+
+To build the archive locally without publishing:
+
+```bash
+scripts/build-pack.sh   # writes dist/cc-edge-claude-code-io-<version>.crbl
+```
+
 ## Release Notes
 
   - **1.0.0** — 2026-03-18
