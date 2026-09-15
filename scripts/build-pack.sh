@@ -10,6 +10,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-$ROOT/dist}"
+mkdir -p "$OUT_DIR"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "error: jq is required" >&2
@@ -20,7 +22,6 @@ NAME="$(jq -r .name "$ROOT/package.json")"
 VERSION="$(jq -r .version "$ROOT/package.json")"
 ARCHIVE="$OUT_DIR/${NAME}-${VERSION}.crbl"
 
-mkdir -p "$OUT_DIR"
 rm -f "$ARCHIVE" "$ARCHIVE.sha256"
 
 # COPYFILE_DISABLE stops macOS tar from adding ._* AppleDouble entries.
@@ -36,7 +37,9 @@ COPYFILE_DISABLE=1 tar \
   -czf "$ARCHIVE" -C "$ROOT" .
 
 # Sanity check: package.json must sit at the archive root.
-if ! tar -tzf "$ARCHIVE" | grep -qx './package.json'; then
+# (Read the full listing first: grep -q closing the pipe early makes GNU tar fail.)
+listing="$(tar -tzf "$ARCHIVE")"
+if ! grep -qx './package.json' <<< "$listing"; then
   echo "error: package.json missing from archive root" >&2
   exit 1
 fi
